@@ -141,6 +141,40 @@ class MoveStrategyChecker():
             return False
         return True
 
+class PieceChecker():
+    @classmethod
+    def check_move(cls, board : Position, piece : Piece, end_position : str, black_to_move : bool):
+        end_coords = position_to_coord(end_position)
+        strategies = {
+            PIECE_ID.pawn : cls.check_pawn_move
+        }
+        return strategies[piece.piece_id](board, piece, end_coords, black_to_move)
+
+    @classmethod
+    def check_pawn_move(cls, board : Position, piece : Piece, end_position : tuple[int, int], black_to_move : bool):
+        positions = board.get_piece_positions()
+        at_endpoint = positions.get(coord_to_position(end_position[1], end_position[0]))
+        if abs(end_position[0] - piece.file) == 1 and (at_endpoint == None or at_endpoint.is_black == black_to_move):
+            # must be capturing to move diagonally
+            # and can't capture own piece
+            print("You can't move diagonally unless you're capturing, and can't capture your own piece.")
+            return False
+        if not abs(end_position[0] - piece.file) == 1 and at_endpoint != None:
+            # can only capture diagonally or something is in our way
+            print("You can only capture diagonally.")
+            return False
+        if abs(end_position[1] - piece.rank) == 2:
+            if end_position[1] < piece.rank:
+                to_check = positions.get( coord_to_position(piece.rank - 1, piece.file) )
+            else:
+                to_check = positions.get( coord_to_position(piece.rank + 1, piece.file) )
+            if to_check != None:
+                # there's something in the way of moving to that spot
+                return False
+        return True
+
+
+
 class Game():
     def __init__(self, renderer : Union[PositionRenderer, None] = None):
         self.renderer = renderer
@@ -152,6 +186,15 @@ class Game():
     def new_position_from_move(self, prev_position : Position, start_position : str, end_position : str) -> Position:
         new_position = deepcopy(prev_position)
         end_coords = position_to_coord(end_position)
+        new_pieces = []
+        # indirectly, remove the piece that we're capturing
+        for piece in new_position.pieces:
+            if piece.file != end_coords[0] or piece.rank != end_coords[1]:
+                new_pieces.append(piece)
+            else:
+                # some kind of behaviour to indicate capture
+                pass
+        new_position.pieces = new_pieces
         piece_positions = new_position.get_piece_positions()
         piece = piece_positions.get(start_position)
         piece.file, piece.rank = end_coords
@@ -181,6 +224,8 @@ class Game():
             print("That's not a valid move for that piece.")
             return False
         # check that there's no obstructions for the move
+        if not PieceChecker.check_move(board, piece, end_position, black_to_move):
+            return False
         # check that the move doesn't reveal check for player moving
         return True
 
@@ -226,7 +271,6 @@ game = Game(renderer)
 # game.render()
 
 while True:
-    system("clear")
     game.render()
     move = input('> ')
     move_split = move.split(" ")
