@@ -109,7 +109,12 @@ class MoveStrategyChecker():
     def check_move(cls, piece : Piece, end_position : str) -> bool:
         end_coords = position_to_coord(end_position)
         strategies = {
-            PIECE_ID.pawn : cls.check_pawn_move
+            PIECE_ID.pawn : cls.check_pawn_move,
+            PIECE_ID.knight : cls.check_knight_move,
+            PIECE_ID.king: cls.check_king_move,
+            PIECE_ID.bishop: cls.check_bishop_move,
+            PIECE_ID.queen: cls.check_queen_move,
+            PIECE_ID.rook: cls.check_rook_move
         }
         if end_coords[0] > 7 or end_coords[0] < 0 or end_coords[1] > 7 or end_coords[1] < 0:
             return False
@@ -117,8 +122,6 @@ class MoveStrategyChecker():
 
     @classmethod
     def check_pawn_move(cls, piece : Piece, end_coords : tuple[int,int]):
-        print(end_coords)
-        print(piece.rank)
         if ((end_coords[1] > piece.rank - 1) and piece.is_black) or ((end_coords[1] < piece.rank + 1) and not piece.is_black):
             # trying to move less than 1 space forward
             print("Tried to move less than 1 square forward.")
@@ -140,31 +143,124 @@ class MoveStrategyChecker():
             print("Tried to move more than 2 squares forward.")
             return False
         return True
+    
+    @classmethod
+    def check_knight_move(cls, piece : Piece, end_coords : tuple[int,int]):
+        x_move = abs(piece.file - end_coords[0])
+        y_move = abs(piece.rank - end_coords[1])
+        if not (x_move == 1 and y_move == 2) or (x_move == 2 and y_move == 1):
+            return False
+        return True
+    
+    @classmethod
+    def check_bishop_move(cls, piece : Piece, end_coords : tuple[int,int]):
+        x_move = abs(piece.file - end_coords[0])
+        y_move = abs(piece.rank - end_coords[1])
+        if not x_move == y_move:
+            print("Bishops must move diagonally.")
+            return False
+        if x_move == 0 and y_move == 0:
+            print("Bishop must move.")
+            return False
+        return True
+
+    @classmethod
+    def check_rook_move(cls, piece : Piece, end_coords : tuple[int,int]):
+        x_move = abs(piece.file - end_coords[0])
+        y_move = abs(piece.rank - end_coords[1])
+        if not (x_move == 0 and y_move > 0) or (x_move > 0 and y_move == 0):
+            print("Rooks must move along a rank or file.")
+            return False
+        return True
+    
+    @classmethod
+    def check_queen_move(cls, piece : Piece, end_coords : tuple[int,int]):
+        x_move = abs(piece.file - end_coords[0])
+        y_move = abs(piece.rank - end_coords[1])
+        if not (x_move == 0 and y_move > 0) or (x_move > 0 and y_move == 0) or x_move == y_move:
+            print("Queens must move along a rank or file or diagonally.")
+            return False
+        if x_move == 0 and y_move == 0:
+            print("Queen must move.")
+            return False
+        return True
+    
+    @classmethod
+    def check_king_move(cls, piece : Piece, end_coords : tuple[int,int]):
+        x_move = abs(piece.file - end_coords[0])
+        y_move = abs(piece.rank - end_coords[1])
+        if x_move > 1 and y_move > 1:
+            print("King can only move one space.")
+            return False
+        if not (x_move == 0 and y_move > 0) or (x_move > 0 and y_move == 0) or x_move == y_move:
+            print("Kings must move along a rank or file or diagonally.")
+            return False
+        if x_move == 0 and y_move == 0:
+            print("King must move.")
+            return False
+        return True
 
 class PieceChecker():
+    
     @classmethod
     def check_move(cls, board : Position, piece : Piece, end_position : str, black_to_move : bool):
         end_coords = position_to_coord(end_position)
         strategies = {
-            PIECE_ID.pawn : cls.check_pawn_move
+            PIECE_ID.pawn : cls.check_pawn_move,
+            PIECE_ID.knight : cls.check_knight_move,
+            PIECE_ID.king: cls.check_bqkr_move,
+            PIECE_ID.bishop: cls.check_bqkr_move,
+            PIECE_ID.queen: cls.check_bqkr_move,
+            PIECE_ID.rook: cls.check_bqkr_move
         }
         return strategies[piece.piece_id](board, piece, end_coords, black_to_move)
 
-    @classmethod
-    def check_pawn_move(cls, board : Position, piece : Piece, end_position : tuple[int, int], black_to_move : bool):
+    @classmethod 
+    def check_endpoint(cls, board : Position, piece : Piece, end_position : tuple[int, int], black_to_move : bool):    
         positions = board.get_piece_positions()
         at_endpoint = positions.get(coord_to_position(end_position[1], end_position[0]))
-        if abs(end_position[0] - piece.file) == 1 and (at_endpoint == None or at_endpoint.is_black == black_to_move):
+        if at_endpoint != None and at_endpoint.is_black == black_to_move:
+            print("Can't move onto your own piece.")
+            return False
+        return True
+
+    @classmethod
+    def check_obstacles(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool):    
+        x_move = end_coords[0] - piece.file
+        y_move = end_coords[1] - piece.rank
+        x_increment = int(x_move / abs(x_move))
+        y_increment = int(y_move / abs(y_move))
+        print(f"({x_increment},{y_increment})")
+        cur_x = piece.file + x_increment # start from next space to move
+        cur_y = piece.rank + y_increment
+        positions = board.get_piece_positions()
+        # ends BEFORE endpoint as this is a separate check
+        while cur_x != end_coords[0] and cur_y != end_coords[1]:
+            position = coord_to_position(cur_y, cur_x)
+            at_position = positions.get(position)
+            if at_position != None:
+                print("There is a piece in the way of making this move.")
+                return False
+            cur_x += x_increment
+            cur_y += y_increment
+        return True
+
+    # en passant not yet implemented
+    @classmethod
+    def check_pawn_move(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool):
+        positions = board.get_piece_positions()
+        at_endpoint = positions.get(coord_to_position(end_coords[1], end_coords[0]))
+        if abs(end_coords[0] - piece.file) == 1 and (at_endpoint == None or at_endpoint.is_black == black_to_move):
             # must be capturing to move diagonally
             # and can't capture own piece
             print("You can't move diagonally unless you're capturing, and can't capture your own piece.")
             return False
-        if not abs(end_position[0] - piece.file) == 1 and at_endpoint != None:
+        if not abs(end_coords[0] - piece.file) == 1 and at_endpoint != None:
             # can only capture diagonally or something is in our way
             print("You can only capture diagonally.")
             return False
-        if abs(end_position[1] - piece.rank) == 2:
-            if end_position[1] < piece.rank:
+        if abs(end_coords[1] - piece.rank) == 2:
+            if end_coords[1] < piece.rank:
                 to_check = positions.get( coord_to_position(piece.rank - 1, piece.file) )
             else:
                 to_check = positions.get( coord_to_position(piece.rank + 1, piece.file) )
@@ -172,8 +268,24 @@ class PieceChecker():
                 # there's something in the way of moving to that spot
                 return False
         return True
+    
+    @classmethod
+    def check_knight_move(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool):    
+        if not cls.check_endpoint(board, piece, end_coords, black_to_move):
+            return False
+        return True
 
+    # logic for rooks, queens, and bishops is identical: these pieces have no special rules
+    # we also need to check obstacles for king in case of castling
+    @classmethod
+    def check_bqkr_move(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool):    
+        if not cls.check_obstacles(board, piece, end_coords, black_to_move):
+            return False
+        if not cls.check_endpoint(board, piece, end_coords, black_to_move):
+            return False
+        return True
 
+    
 
 class Game():
     def __init__(self, renderer : Union[PositionRenderer, None] = None):
