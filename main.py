@@ -228,8 +228,8 @@ class PieceChecker():
     def check_obstacles(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool):    
         x_move = end_coords[0] - piece.file
         y_move = end_coords[1] - piece.rank
-        x_increment = int(x_move / abs(x_move))
-        y_increment = int(y_move / abs(y_move))
+        x_increment = int(x_move / abs(x_move)) if x_move > 0 else 0
+        y_increment = int(y_move / abs(y_move)) if y_move > 0 else 0
         print(f"({x_increment},{y_increment})")
         cur_x = piece.file + x_increment # start from next space to move
         cur_y = piece.rank + y_increment
@@ -285,7 +285,35 @@ class PieceChecker():
             return False
         return True
 
-    
+class CheckChecker:
+    @classmethod
+    def check_can_attack(cls, board : Position, team_is_black : bool, to_attack : str):
+        pieces = [piece for piece in board.pieces if piece.is_black == team_is_black]
+        for piece in pieces:
+            # if any piece can attack the space, the space can be attacked
+            if MoveStrategyChecker.check_move(piece, to_attack) and PieceChecker.check_move(board, piece, to_attack, team_is_black):
+                return True
+        return False  
+
+    # tuple stores [is black in check? is white in check?]
+    @classmethod
+    def check_check(cls, board : Position) -> tuple[bool, bool]:
+        black_king = None
+        white_king = None
+        # get black king and white king
+        for piece in board.pieces:
+            if piece.piece_id == PIECE_ID.king:
+                if piece.is_black:
+                    black_king = piece
+                else:
+                    white_king = piece
+                if black_king is not None and white_king is not None:
+                    break
+
+        return (
+            cls.check_can_attack(board, True, coord_to_position(black_king.rank, black_king.file)),
+            cls.check_can_attack(board, False, coord_to_position(white_king.rank, white_king.file))
+        )
 
 class Game():
     def __init__(self, renderer : Union[PositionRenderer, None] = None):
@@ -317,6 +345,11 @@ class Game():
         if not valid:
             return
         self.current_position = Game.new_position_from_move(self.current_position, start_position, end_position)
+        checks = CheckChecker.check_check(self.current_position)
+        if checks[0] or checks[1]:
+            team = "Black" if checks[0] else "White"
+            print(f"{team} is in check!")
+        # for checkmate, need to generate all possible next moves for defending team and see if any escape check
         self.black_to_move = not self.black_to_move
 
     @classmethod
@@ -337,8 +370,15 @@ class Game():
             return False
         # check that there's no obstructions for the move
         if not PieceChecker.check_move(board, piece, end_position, black_to_move):
+            print("This move is obstructed by another piece.")
             return False
-        # check that the move doesn't reveal check for player moving
+        # check that the move doesn't reveal or maintain check for player moving
+        new_position = Game.new_position_from_move(board, start_position, end_position)
+        in_check = CheckChecker.check_check(new_position)
+        print(in_check)
+        if (black_to_move and in_check[0]) or (not black_to_move and in_check[1]):
+            print("This move would reveal or maintain check against your king!")
+            return False
         return True
 
     def setup(self):
