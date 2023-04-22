@@ -2,6 +2,9 @@ from enum import IntEnum, auto
 from copy import deepcopy
 from typing import Union
 from os import system
+from time import sleep
+
+DEBUG = False
 
 class PIECE_ID(IntEnum):
     king = 0
@@ -23,6 +26,10 @@ piece_info = {
     PIECE_ID.knight: "Knight",
     PIECE_ID.pawn: "Pawn"
 }
+
+def d_print(string):
+    if DEBUG:
+        print(string)
 
 def get_unicode_char(piece_id : PIECE_ID, isBlack : bool, darkmode : bool = False):
     modifier = 0
@@ -124,23 +131,23 @@ class MoveStrategyChecker():
     def check_pawn_move(cls, piece : Piece, end_coords : tuple[int,int]):
         if ((end_coords[1] > piece.rank - 1) and piece.is_black) or ((end_coords[1] < piece.rank + 1) and not piece.is_black):
             # trying to move less than 1 space forward
-            print("Tried to move less than 1 square forward.")
+            d_print("Tried to move less than 1 square forward.")
             return False
         if abs(end_coords[0] - piece.file) > 1:
             # trying to move more than 1 square to the side
-            print("Tried to move too far sideways.")
+            d_print("Tried to move too far sideways.")
             return False
         if ((piece.rank != 1 and not piece.is_black) or (piece.rank != 6 and piece.is_black)) and (abs(piece.rank - end_coords[1]) > 1):
             # trying to move 2 when it's not first turn
-            print("Tried to move 2 squares when it's not this pawn's first move.")
+            d_print("Tried to move 2 squares when it's not this pawn's first move.")
             return False
         if abs(end_coords[0] - piece.file) > 0 and abs(end_coords[1] - piece.rank) > 1:
             # trying to move 2 forward and 1 sideways (like a knight)
-            print("Tried to move like a knight.")
+            d_print("Tried to move like a knight.")
             return False
         if (abs(piece.rank - end_coords[1]) > 2):
             # trying to move more than 2, ever
-            print("Tried to move more than 2 squares forward.")
+            d_print("Tried to move more than 2 squares forward.")
             return False
         return True
     
@@ -148,7 +155,7 @@ class MoveStrategyChecker():
     def check_knight_move(cls, piece : Piece, end_coords : tuple[int,int]):
         x_move = abs(piece.file - end_coords[0])
         y_move = abs(piece.rank - end_coords[1])
-        if not (x_move == 1 and y_move == 2) or (x_move == 2 and y_move == 1):
+        if not ((x_move == 1 and y_move == 2) or (x_move == 2 and y_move == 1)):
             return False
         return True
     
@@ -157,10 +164,10 @@ class MoveStrategyChecker():
         x_move = abs(piece.file - end_coords[0])
         y_move = abs(piece.rank - end_coords[1])
         if not x_move == y_move:
-            print("Bishops must move diagonally.")
+            d_print("Bishops must move diagonally.")
             return False
         if x_move == 0 and y_move == 0:
-            print("Bishop must move.")
+            d_print("Bishop must move.")
             return False
         return True
 
@@ -169,7 +176,7 @@ class MoveStrategyChecker():
         x_move = abs(piece.file - end_coords[0])
         y_move = abs(piece.rank - end_coords[1])
         if not (x_move == 0 and y_move > 0) or (x_move > 0 and y_move == 0):
-            print("Rooks must move along a rank or file.")
+            d_print("Rooks must move along a rank or file.")
             return False
         return True
     
@@ -177,11 +184,12 @@ class MoveStrategyChecker():
     def check_queen_move(cls, piece : Piece, end_coords : tuple[int,int]):
         x_move = abs(piece.file - end_coords[0])
         y_move = abs(piece.rank - end_coords[1])
-        if not (x_move == 0 and y_move > 0) or (x_move > 0 and y_move == 0) or x_move == y_move:
-            print("Queens must move along a rank or file or diagonally.")
+        if not ((x_move == 0 and y_move > 0) or (x_move > 0 and y_move == 0) or (x_move == y_move)):
+            d_print(f"{x_move},{y_move}")
+            d_print("Queens must move along a rank or file or diagonally.")
             return False
         if x_move == 0 and y_move == 0:
-            print("Queen must move.")
+            d_print("Queen must move.")
             return False
         return True
     
@@ -189,14 +197,14 @@ class MoveStrategyChecker():
     def check_king_move(cls, piece : Piece, end_coords : tuple[int,int]):
         x_move = abs(piece.file - end_coords[0])
         y_move = abs(piece.rank - end_coords[1])
-        if x_move > 1 and y_move > 1:
-            print("King can only move one space.")
+        if x_move > 1 or y_move > 1:
+            d_print("King can only move one space.")
             return False
         if not (x_move == 0 and y_move > 0) or (x_move > 0 and y_move == 0) or x_move == y_move:
-            print("Kings must move along a rank or file or diagonally.")
+            d_print("Kings must move along a rank or file or diagonally.")
             return False
         if x_move == 0 and y_move == 0:
-            print("King must move.")
+            d_print("King must move.")
             return False
         return True
 
@@ -220,7 +228,7 @@ class PieceChecker():
         positions = board.get_piece_positions()
         at_endpoint = positions.get(coord_to_position(end_position[1], end_position[0]))
         if at_endpoint != None and at_endpoint.is_black == black_to_move:
-            print("Can't move onto your own piece.")
+            d_print("Can't move onto your own piece.")
             return False
         return True
 
@@ -228,9 +236,8 @@ class PieceChecker():
     def check_obstacles(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool):    
         x_move = end_coords[0] - piece.file
         y_move = end_coords[1] - piece.rank
-        x_increment = int(x_move / abs(x_move)) if x_move > 0 else 0
-        y_increment = int(y_move / abs(y_move)) if y_move > 0 else 0
-        print(f"({x_increment},{y_increment})")
+        x_increment = int(x_move / abs(x_move)) if x_move != 0 else 0
+        y_increment = int(y_move / abs(y_move)) if y_move != 0 else 0
         cur_x = piece.file + x_increment # start from next space to move
         cur_y = piece.rank + y_increment
         positions = board.get_piece_positions()
@@ -239,7 +246,7 @@ class PieceChecker():
             position = coord_to_position(cur_y, cur_x)
             at_position = positions.get(position)
             if at_position != None:
-                print("There is a piece in the way of making this move.")
+                d_print("There is a piece in the way of making this move.")
                 return False
             cur_x += x_increment
             cur_y += y_increment
@@ -253,11 +260,11 @@ class PieceChecker():
         if abs(end_coords[0] - piece.file) == 1 and (at_endpoint == None or at_endpoint.is_black == black_to_move):
             # must be capturing to move diagonally
             # and can't capture own piece
-            print("You can't move diagonally unless you're capturing, and can't capture your own piece.")
+            d_print("You can't move diagonally unless you're capturing, and can't capture your own piece.")
             return False
         if not abs(end_coords[0] - piece.file) == 1 and at_endpoint != None:
             # can only capture diagonally or something is in our way
-            print("You can only capture diagonally.")
+            d_print("You can only capture diagonally.")
             return False
         if abs(end_coords[1] - piece.rank) == 2:
             if end_coords[1] < piece.rank:
@@ -291,7 +298,11 @@ class CheckChecker:
         pieces = [piece for piece in board.pieces if piece.is_black == team_is_black]
         for piece in pieces:
             # if any piece can attack the space, the space can be attacked
+            # if piece.piece_id == PIECE_ID.king:
+            #     # no pawns in pieces? O.o
+            #     print(f"Bishop can attack: {MoveStrategyChecker.check_move(piece, to_attack)}")
             if MoveStrategyChecker.check_move(piece, to_attack) and PieceChecker.check_move(board, piece, to_attack, team_is_black):
+                d_print("A piece can give check to king.")
                 return True
         return False  
 
@@ -310,10 +321,111 @@ class CheckChecker:
                 if black_king is not None and white_king is not None:
                     break
 
+        black_position = coord_to_position(black_king.rank, black_king.file)
+        d_print(f"Black King position is {black_position}")
+        white_position = coord_to_position(white_king.rank, white_king.file)
+        d_print(f"White King position is {white_position}")
+
         return (
-            cls.check_can_attack(board, True, coord_to_position(black_king.rank, black_king.file)),
-            cls.check_can_attack(board, False, coord_to_position(white_king.rank, white_king.file))
+            cls.check_can_attack(board, False, black_position),
+            cls.check_can_attack(board, True, white_position)
         )
+    
+class MoveMaker():
+    @classmethod
+    def make_possible_moves(cls, position : Position, piece : Piece):
+        strategies = {
+            PIECE_ID.pawn: cls.make_pawn_move,
+            PIECE_ID.king: cls.make_king_move,
+            PIECE_ID.queen: cls.make_queen_move,
+            PIECE_ID.rook: cls.make_rook_move,
+            PIECE_ID.bishop: cls.make_bishop_move,
+            PIECE_ID.knight: cls.make_knight_move
+        }
+        return strategies[piece.piece_id](piece)
+    
+    @classmethod
+    def make_pawn_move(cls, piece : Piece):
+        forward = -1 if piece.is_black else 1
+        start_position = coord_to_position(piece.rank, piece.file)
+        moves = []
+        cases = [ (forward, 0), (forward * 2, 0), (forward, 1), (forward, -1) ]
+        for case in cases:
+            end_coord = (piece.rank + case[0], piece.file + case[1])
+            if end_coord[0] >= 0 and end_coord[0] < 8 and end_coord[1] >= 0 and end_coord[1] < 8:
+                end_position = coord_to_position(end_coord[0], end_coord[1])
+                moves.append((start_position, end_position))
+        return moves
+
+    @classmethod
+    def make_king_move(cls, piece : Piece):
+        moves = []
+        start_position = coord_to_position(piece.rank, piece.file)
+        for x_move in range(-2, 3): # account for castling
+            for y_move in range(-1, 2):
+                if x_move == 0 and y_move == 0:
+                    continue
+                final_y = piece.rank + y_move
+                final_x = piece.file + x_move
+                if final_x > 7 or final_x < 0 or final_y > 7 or final_y < 0:
+                    continue
+                end_position = coord_to_position(final_y, final_x)
+                moves.append((start_position, end_position))
+        return moves
+
+    @classmethod
+    def make_queen_move(cls, piece):
+        moves = []
+        moves.extend(cls.make_rook_move(piece))
+        moves.extend(cls.make_bishop_move(piece))
+        return moves
+
+    @classmethod
+    def make_rook_move(cls, piece : Piece):
+        moves = []
+        start_position = coord_to_position(piece.rank, piece.file)
+        for x_move in range(8):
+            end_position = coord_to_position(piece.rank, x_move)
+            moves.append((start_position, end_position))
+        for y_move in range(8):
+            end_position = coord_to_position(y_move, piece.file)
+        return moves
+
+    @classmethod
+    def make_bishop_move(cls, piece : Piece):
+        moves = []
+        start_position = coord_to_position(piece.rank, piece.file)
+        for distance in range(1,8):
+            # down-right (+,+)
+            if piece.rank + distance < 8 and piece.file + distance < 8:
+                end_position = coord_to_position(piece.rank + distance, piece.file + distance)
+                moves.append((start_position, end_position))
+            # down-left (-,+)
+            if piece.rank + distance < 8 and piece.file - distance >= 0:
+                end_position = coord_to_position(piece.rank + distance, piece.file - distance)
+                moves.append((start_position, end_position))
+            # up-right (+,-)
+            if piece.rank - distance >= 0 and piece.file + distance < 8:
+                end_position = coord_to_position(piece.rank - distance, piece.file + distance)
+                moves.append((start_position, end_position))
+            # up-left (-,-)
+            if piece.rank - distance >= 0 and piece.file - distance >= 0:
+                end_position = coord_to_position(piece.rank - distance, piece.file - distance)
+                moves.append((start_position, end_position))
+        return moves
+
+    @classmethod
+    def make_knight_move(cls, piece : Piece):
+        # cases: x = 2, y = 1; y = 2, x = 1 and abs equivalents
+        moves = []
+        start_position = coord_to_position(piece.rank, piece.file)
+        cases : list[tuple[int]] = [ (1,2), (2,1), (-1, 2), (-2, 1), (1, -2), (2, -1), (-2, -1), (-1, -2) ]
+        for case in cases:
+            end_coord = (piece.rank + case[0], piece.file + case[1])
+            if end_coord[0] >= 0 and end_coord[0] < 8 and end_coord[1] >= 0 and end_coord[1] < 8:
+                end_position = coord_to_position(end_coord[0], end_coord[1])
+                moves.append((start_position, end_position))
+        return moves
 
 class Game():
     def __init__(self, renderer : Union[PositionRenderer, None] = None):
@@ -340,6 +452,22 @@ class Game():
         piece.file, piece.rank = end_coords
         return new_position
     
+    # generates all possible possitions for current player to move to
+    # helpful for AI
+    # if this returns 0 positions, it means that the player whose turn it is has been mated
+    @classmethod
+    def generate_next_positions(cls, position : Position, black_to_move : bool):
+        pieces : list[Piece] = position.pieces
+        pieces_to_move = filter(lambda piece : piece.is_black == black_to_move, pieces)
+        moves = []
+        for piece in pieces_to_move:
+            moves.extend(MoveMaker.make_possible_moves(position, piece))
+        valid_moves = filter(lambda move : cls.check_move(position, move[0], move[1], black_to_move), moves)
+        next_positions = []
+        for move in valid_moves:
+            next_positions.append(cls.new_position_from_move(position, move[0], move[1]))
+        return next_positions
+
     def try_move(self, start_position : str, end_position : str):
         valid = Game.check_move(self.current_position, start_position, end_position, self.black_to_move)
         if not valid:
@@ -351,6 +479,7 @@ class Game():
             print(f"{team} is in check!")
         # for checkmate, need to generate all possible next moves for defending team and see if any escape check
         self.black_to_move = not self.black_to_move
+        
 
     @classmethod
     def check_move(cls, board : Position, start_position : str, end_position : str, black_to_move : bool):
@@ -358,26 +487,26 @@ class Game():
         piece = piece_positions.get(start_position)
         # check that there's a piece where we want to move
         if piece is None:
-            print("There's no piece in that square.")
+            d_print("There's no piece in that square.")
             return False
         # check that the piece belongs to us
         if piece.is_black != black_to_move:
-            print("This is not your piece to move.")
+            d_print("This is not your piece to move.")
             return False
         # check that the move's not invalid for the piece
         if not MoveStrategyChecker.check_move(piece, end_position):
-            print("That's not a valid move for that piece.")
+            d_print("That's not a valid move for that piece.")
             return False
         # check that there's no obstructions for the move
         if not PieceChecker.check_move(board, piece, end_position, black_to_move):
-            print("This move is obstructed by another piece.")
+            d_print("This move is obstructed by another piece.")
             return False
         # check that the move doesn't reveal or maintain check for player moving
         new_position = Game.new_position_from_move(board, start_position, end_position)
         in_check = CheckChecker.check_check(new_position)
-        print(in_check)
+        # reversed because black_to_move is the PREVIOUS state of the board
         if (black_to_move and in_check[0]) or (not black_to_move and in_check[1]):
-            print("This move would reveal or maintain check against your king!")
+            d_print("This move would reveal or maintain check against your king!")
             return False
         return True
 
@@ -422,8 +551,26 @@ renderer = PositionRenderer(darkmode=True)
 game = Game(renderer)
 # game.render()
 
-while True:
-    game.render()
-    move = input('> ')
+# preprocess_list = []
+preprocess_list = ["E2 E4", "E7 E5", "F1 C4", "B8 C6", "D1 H5", "D7 D6", "H5 F7"]
+for move in preprocess_list:
     move_split = move.split(" ")
     game.try_move(move_split[0], move_split[1])
+
+while True:
+    game.render()
+
+    next_moves = Game.generate_next_positions(game.current_position, game.black_to_move)
+    checks = CheckChecker.check_check(game.current_position)
+    if len(next_moves) == 0:
+        if checks[0] or checks[1]:
+            team = "Black" if checks[0] else "White"
+            print(f"{team} has been mated! Wait 5s to restart.")
+            sleep(5)
+            game.setup()
+            game.render()
+
+    move = input('> ')
+    move_split = move.upper().split(" ")
+    if len(move_split) == 2:
+        game.try_move(move_split[0], move_split[1])
