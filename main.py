@@ -60,6 +60,7 @@ class Piece:
         self.is_black = is_black
         self.rank = rank
         self.file = file
+        self.moved = False
 
 class Position:
     def __init__(self, pieces : list[Piece]):
@@ -70,7 +71,7 @@ class Position:
         for piece in self.pieces:
             positions[coord_to_position(piece.rank, piece.file)] = piece
         return positions
-
+    
 class PositionRenderer:
 
     def __init__(self, chars = None, darkmode = False):
@@ -242,7 +243,7 @@ class PieceChecker():
         cur_y = piece.rank + y_increment
         positions = board.get_piece_positions()
         # ends BEFORE endpoint as this is a separate check
-        while cur_x != end_coords[0] and cur_y != end_coords[1]:
+        while not (cur_x == end_coords[0] and cur_y == end_coords[1]):
             position = coord_to_position(cur_y, cur_x)
             at_position = positions.get(position)
             if at_position != None:
@@ -291,6 +292,48 @@ class PieceChecker():
         if not cls.check_endpoint(board, piece, end_coords, black_to_move):
             return False
         return True
+    
+    @classmethod
+    def check_castling(cls, position : Position, start_position : str, end_position : str, black_to_move : bool):
+        piece_positions = position.get_piece_positions()
+        piece = piece_positions.get(start_position)
+        
+        # if we're not moving a king
+        if not piece.piece_id == PIECE_ID.king: return True
+        
+        start_coords = position_to_coord(start_position)
+        end_coords = position_to_coord(end_position)
+        x_diff = end_coords[0] - start_coords[0]
+        
+        # if you're not trying to castle
+        if abs(x_diff) != 2: return True
+
+        if piece.moved: return False
+
+        mid = coord_to_position(end_coords[1], end_coords[0] + x_diff / 2)
+
+        # if player is attempting to castle through check
+        # we don't check for endpoint or obstacles because those are already handled by separate, generic checks
+        if CheckChecker.check_can_attack(position, not black_to_move, mid): return False
+
+        # black kingside
+        if piece.is_black and end_position == "G8":
+            rook_position = "H8"
+        # black queenside
+        elif piece.is_black and end_position == "C8":
+            rook_position = "A8"
+        # white kingside
+        elif not piece.is_black and end_position == "G1":
+            rook_position = "H1"
+        # white queenside
+        elif not piece.is_black and end_position == "C1":
+            rook_position = "A1"
+        
+        rook = piece_positions.get(rook_position)
+        if rook != None and rook.piece_id == PIECE_ID.rook and not rook.moved:
+            return True
+
+        return False
 
 class CheckChecker:
     @classmethod
@@ -430,6 +473,7 @@ class MoveMaker():
 class Game():
     def __init__(self, renderer : Union[PositionRenderer, None] = None):
         self.renderer = renderer
+        self.king_moved = [False, False]
         if renderer is None:
             self.renderer = PositionRenderer()
         self.setup()
@@ -501,6 +545,8 @@ class Game():
         if not PieceChecker.check_move(board, piece, end_position, black_to_move):
             d_print("This move is obstructed by another piece.")
             return False
+        if piece.piece_id == PIECE_ID.king:
+            PieceChecker.check_castling(board, start_position, end_position, black_to_move)
         # check that the move doesn't reveal or maintain check for player moving
         new_position = Game.new_position_from_move(board, start_position, end_position)
         in_check = CheckChecker.check_check(new_position)
