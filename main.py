@@ -54,6 +54,20 @@ def coord_to_position(rank : int, file : int) -> str:
 def position_to_coord(position : str):
     return (letter_to_file(position[0]), int(position[1]) - 1)
 
+def find_rook_position(is_black, end_position):
+    # black kingside
+    if is_black and end_position == "G8":
+        return "H8"
+    # black queenside
+    elif is_black and end_position == "C8":
+        return "A8"
+    # white kingside
+    elif not is_black and end_position == "G1":
+        return "H1"
+    # white queenside
+    elif not is_black and end_position == "C1":
+        return "A1"
+
 class Piece:
     def __init__(self, piece_id: PIECE_ID, is_black : bool, rank : int = 0, file : int = 0):
         self.piece_id = piece_id
@@ -198,10 +212,10 @@ class MoveStrategyChecker():
     def check_king_move(cls, piece : Piece, end_coords : tuple[int,int]):
         x_move = abs(piece.file - end_coords[0])
         y_move = abs(piece.rank - end_coords[1])
-        if x_move > 1 or y_move > 1:
+        if x_move > 2 or y_move > 1:
             d_print("King can only move one space.")
             return False
-        if not (x_move == 0 and y_move > 0) or (x_move > 0 and y_move == 0) or x_move == y_move:
+        if not ((x_move == 0 and y_move > 0) or (x_move > 0 and y_move == 0) or x_move == y_move):
             d_print("Kings must move along a rank or file or diagonally.")
             return False
         if x_move == 0 and y_move == 0:
@@ -304,31 +318,16 @@ class PieceChecker():
         start_coords = position_to_coord(start_position)
         end_coords = position_to_coord(end_position)
         x_diff = end_coords[0] - start_coords[0]
-        
         # if you're not trying to castle
         if abs(x_diff) != 2: return True
-
         if piece.moved: return False
 
-        mid = coord_to_position(end_coords[1], end_coords[0] + x_diff / 2)
-
+        mid = coord_to_position(end_coords[1], end_coords[0] + int(x_diff / 2))
         # if player is attempting to castle through check
         # we don't check for endpoint or obstacles because those are already handled by separate, generic checks
         if CheckChecker.check_can_attack(position, not black_to_move, mid): return False
 
-        # black kingside
-        if piece.is_black and end_position == "G8":
-            rook_position = "H8"
-        # black queenside
-        elif piece.is_black and end_position == "C8":
-            rook_position = "A8"
-        # white kingside
-        elif not piece.is_black and end_position == "G1":
-            rook_position = "H1"
-        # white queenside
-        elif not piece.is_black and end_position == "C1":
-            rook_position = "A1"
-        
+        rook_position = find_rook_position(piece.is_black, end_position)
         rook = piece_positions.get(rook_position)
         if rook != None and rook.piece_id == PIECE_ID.rook and not rook.moved:
             return True
@@ -481,6 +480,7 @@ class Game():
     @classmethod
     def new_position_from_move(self, prev_position : Position, start_position : str, end_position : str) -> Position:
         new_position = deepcopy(prev_position)
+        start_coords = position_to_coord(start_position)
         end_coords = position_to_coord(end_position)
         new_pieces = []
         # indirectly, remove the piece that we're capturing
@@ -493,7 +493,16 @@ class Game():
         new_position.pieces = new_pieces
         piece_positions = new_position.get_piece_positions()
         piece = piece_positions.get(start_position)
+        # check for castling as we then need to move *two* pieces
+        # if it's an invalid castle it should have been dealt with long ago
+        if piece.piece_id == PIECE_ID.king and abs(start_coords[0] - end_coords[0]) == 2:
+            rook_position = find_rook_position(piece.is_black,end_position)
+            rook = piece_positions.get(rook_position)
+            if rook.file == 0: rook.file = 3
+            elif rook.file == 7: rook.file = 5
+            rook.moved = True
         piece.file, piece.rank = end_coords
+        piece.moved = True
         return new_position
     
     # generates all possible possitions for current player to move to
@@ -546,7 +555,8 @@ class Game():
             d_print("This move is obstructed by another piece.")
             return False
         if piece.piece_id == PIECE_ID.king:
-            PieceChecker.check_castling(board, start_position, end_position, black_to_move)
+            if not PieceChecker.check_castling(board, start_position, end_position, black_to_move):
+                return False
         # check that the move doesn't reveal or maintain check for player moving
         new_position = Game.new_position_from_move(board, start_position, end_position)
         in_check = CheckChecker.check_check(new_position)
@@ -597,8 +607,13 @@ renderer = PositionRenderer(darkmode=True)
 game = Game(renderer)
 # game.render()
 
-# preprocess_list = []
-preprocess_list = ["E2 E4", "E7 E5", "F1 C4", "B8 C6", "D1 H5", "D7 D6", "H5 F7"]
+# normal start
+preprocess_list = []
+# test kingside castling
+# preprocess_list = ["E2 E4", "E7 E5", "F1 E2", "F8 E7", "G1 F3", "G8 F6", "E1 G1", "E8 G8"]
+# test queenside castling
+# preprocess_list = ["E2 E4", "E7 E5", "D2 D4", "D7 D5", "D1 E2", "D8 E7", "C1 D2", "C8 D7", "B1 C3", "B8 C6", "E1 C1", "E8 C8"]
+# preprocess_list = ["E2 E4", "E7 E5", "F1 C4", "B8 C6", "D1 H5", "D7 D6", "H5 F7"]
 for move in preprocess_list:
     move_split = move.split(" ")
     game.try_move(move_split[0], move_split[1])
