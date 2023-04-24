@@ -470,15 +470,16 @@ class MoveMaker():
         return moves
 
 class Game():
-    def __init__(self, renderer : Union[PositionRenderer, None] = None):
+    def __init__(self, renderer : Union[PositionRenderer, None] = None, pawn_choice = None):
         self.renderer = renderer
         self.king_moved = [False, False]
         if renderer is None:
             self.renderer = PositionRenderer()
         self.setup()
+        self.pawn_choice = pawn_choice
 
     @classmethod
-    def new_position_from_move(self, prev_position : Position, start_position : str, end_position : str) -> Position:
+    def new_position_from_move(self, prev_position : Position, start_position : str, end_position : str, make_pawn_choice : callable) -> Position:
         new_position = deepcopy(prev_position)
         start_coords = position_to_coord(start_position)
         end_coords = position_to_coord(end_position)
@@ -501,10 +502,18 @@ class Game():
             if rook.file == 0: rook.file = 3
             elif rook.file == 7: rook.file = 5
             rook.moved = True
+        # spicy logic here but as pawns can't go backwards, should be fine
+        elif piece.piece_id == PIECE_ID.pawn and (end_coords[1] == 7 or end_coords[1] == 0):
+            pawn_choice : int = make_pawn_choice()
+            piece.piece_id = pawn_choice
+
         piece.file, piece.rank = end_coords
         piece.moved = True
         return new_position
     
+    @classmethod
+    def always_promote_queen(cls):
+        return PIECE_ID.queen
     # generates all possible possitions for current player to move to
     # helpful for AI
     # if this returns 0 positions, it means that the player whose turn it is has been mated
@@ -518,14 +527,14 @@ class Game():
         valid_moves = filter(lambda move : cls.check_move(position, move[0], move[1], black_to_move), moves)
         next_positions = []
         for move in valid_moves:
-            next_positions.append(cls.new_position_from_move(position, move[0], move[1]))
+            next_positions.append(cls.new_position_from_move(position, move[0], move[1], cls.always_promote_queen))
         return next_positions
 
     def try_move(self, start_position : str, end_position : str):
         valid = Game.check_move(self.current_position, start_position, end_position, self.black_to_move)
         if not valid:
             return
-        self.current_position = Game.new_position_from_move(self.current_position, start_position, end_position)
+        self.current_position = Game.new_position_from_move(self.current_position, start_position, end_position, self.pawn_choice)
         checks = CheckChecker.check_check(self.current_position)
         if checks[0] or checks[1]:
             team = "Black" if checks[0] else "White"
@@ -558,7 +567,7 @@ class Game():
             if not PieceChecker.check_castling(board, start_position, end_position, black_to_move):
                 return False
         # check that the move doesn't reveal or maintain check for player moving
-        new_position = Game.new_position_from_move(board, start_position, end_position)
+        new_position = Game.new_position_from_move(board, start_position, end_position, cls.always_promote_queen)
         in_check = CheckChecker.check_check(new_position)
         # reversed because black_to_move is the PREVIOUS state of the board
         if (black_to_move and in_check[0]) or (not black_to_move and in_check[1]):
@@ -603,8 +612,19 @@ class Game():
             pieces.append(Piece(PIECE_ID.pawn, True, file=i, rank=6))
         return Position(pieces)
 
+
+def pawn_choice():
+    choice = -1
+    valid = [PIECE_ID.bishop, PIECE_ID.rook, PIECE_ID.knight, PIECE_ID.queen]
+    while choice not in valid:
+        print("Choose a piece to promote your pawn to")
+        for c in valid:
+            print(f"{c} - {piece_info[c]}")
+        choice = int(input("> "))
+    return choice
+
 renderer = PositionRenderer(darkmode=True)
-game = Game(renderer)
+game = Game(renderer, pawn_choice)
 # game.render()
 
 # normal start
@@ -613,7 +633,10 @@ preprocess_list = []
 # preprocess_list = ["E2 E4", "E7 E5", "F1 E2", "F8 E7", "G1 F3", "G8 F6", "E1 G1", "E8 G8"]
 # test queenside castling
 # preprocess_list = ["E2 E4", "E7 E5", "D2 D4", "D7 D5", "D1 E2", "D8 E7", "C1 D2", "C8 D7", "B1 C3", "B8 C6", "E1 C1", "E8 C8"]
+# test scholars mate
 # preprocess_list = ["E2 E4", "E7 E5", "F1 C4", "B8 C6", "D1 H5", "D7 D6", "H5 F7"]
+# test hardcore pawn
+# preprocess_list = ["F2 F4", "C7 C5", "F4 F5", "C5 C4", "F5 F6", "C4 C3", "F6 G7", "C3 B2", "G7 H8"]
 for move in preprocess_list:
     move_split = move.split(" ")
     game.try_move(move_split[0], move_split[1])
