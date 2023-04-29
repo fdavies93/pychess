@@ -193,7 +193,7 @@ class MoveStrategyChecker():
     def check_rook_move(cls, piece : Piece, end_coords : tuple[int,int]):
         x_move = abs(piece.file - end_coords[0])
         y_move = abs(piece.rank - end_coords[1])
-        if not (x_move == 0 and y_move > 0) or (x_move > 0 and y_move == 0):
+        if not ((x_move == 0 and y_move > 0) or (x_move > 0 and y_move == 0)):
             d_print("Rooks must move along a rank or file.")
             return False
         return True
