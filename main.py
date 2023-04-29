@@ -3,6 +3,9 @@ from copy import deepcopy
 from typing import Union
 from os import system
 from time import sleep
+import json
+import argparse
+import io
 
 DEBUG = False
 
@@ -472,6 +475,7 @@ class MoveMaker():
 class Game():
     def __init__(self, renderer : Union[PositionRenderer, None] = None, pawn_choice = None):
         self.renderer = renderer
+        self.prev_moves = []
         self.king_moved = [False, False]
         if renderer is None:
             self.renderer = PositionRenderer()
@@ -535,6 +539,7 @@ class Game():
         if not valid:
             return
         self.current_position = Game.new_position_from_move(self.current_position, start_position, end_position, self.pawn_choice)
+        self.prev_moves.append(f"{start_position} {end_position}")
         checks = CheckChecker.check_check(self.current_position)
         if checks[0] or checks[1]:
             team = "Black" if checks[0] else "White"
@@ -623,38 +628,55 @@ def pawn_choice():
         choice = int(input("> "))
     return choice
 
-renderer = PositionRenderer(darkmode=True)
-game = Game(renderer, pawn_choice)
-# game.render()
 
-# normal start
-preprocess_list = []
-# test kingside castling
-# preprocess_list = ["E2 E4", "E7 E5", "F1 E2", "F8 E7", "G1 F3", "G8 F6", "E1 G1", "E8 G8"]
-# test queenside castling
-# preprocess_list = ["E2 E4", "E7 E5", "D2 D4", "D7 D5", "D1 E2", "D8 E7", "C1 D2", "C8 D7", "B1 C3", "B8 C6", "E1 C1", "E8 C8"]
-# test scholars mate
-# preprocess_list = ["E2 E4", "E7 E5", "F1 C4", "B8 C6", "D1 H5", "D7 D6", "H5 F7"]
-# test hardcore pawn
-# preprocess_list = ["F2 F4", "C7 C5", "F4 F5", "C5 C4", "F5 F6", "C4 C3", "F6 G7", "C3 B2", "G7 H8"]
-for move in preprocess_list:
-    move_split = move.split(" ")
-    game.try_move(move_split[0], move_split[1])
+def main():
+    parser = argparse.ArgumentParser(description="Python Chess game.")
+    parser.add_argument('--store', help="Store the list of moves at the given path.")
+    parser.add_argument('--load', help="Load the list of moves at the given path.")
+    args = vars(parser.parse_args())
 
-while True:
-    game.render()
+    renderer = PositionRenderer(darkmode=True)
+    game = Game(renderer, pawn_choice)
 
-    next_moves = Game.generate_next_positions(game.current_position, game.black_to_move)
-    checks = CheckChecker.check_check(game.current_position)
-    if len(next_moves) == 0:
-        if checks[0] or checks[1]:
-            team = "Black" if checks[0] else "White"
-            print(f"{team} has been mated! Wait 5s to restart.")
-            sleep(5)
-            game.setup()
-            game.render()
+    # normal start
+    preprocess_list = []
 
-    move = input('> ')
-    move_split = move.upper().split(" ")
-    if len(move_split) == 2:
+    store_path = args.get("store")
+    load_path = args.get("load")
+    if load_path != None:
+        with open(load_path,  "r") as f:
+            all_lines = "\n".join(f.readlines())
+            preprocess_list = json.loads(all_lines)
+
+    for move in preprocess_list:
+        move_split = move.split(" ")
         game.try_move(move_split[0], move_split[1])
+
+    while True:
+        game.render()
+
+        next_moves = Game.generate_next_positions(game.current_position, game.black_to_move)
+        checks = CheckChecker.check_check(game.current_position)
+        if len(next_moves) == 0:
+            if checks[0] or checks[1]:
+                team = "Black" if checks[0] else "White"
+                print(f"{team} has been mated! Wait 5s to restart.")
+                sleep(5)
+                game.setup()
+                game.render()
+
+        move = input('> ')
+        if move in ["quit", "exit", "q"]:
+            break
+        move_split = move.upper().split(" ")
+
+        if len(move_split) == 2:
+            game.try_move(move_split[0], move_split[1])
+        
+        # store after each move
+        if store_path != None:
+            with open(store_path, "w") as f:
+                json.dump(game.prev_moves, f)
+
+if __name__ == "__main__":
+    main()
