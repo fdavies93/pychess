@@ -82,13 +82,13 @@ class Piece:
 class Position:
     def __init__(self, pieces : list[Piece]):
         self.pieces = deepcopy(pieces)
-    
+
     def get_piece_positions(self) -> dict[str, Piece]:
         positions = dict()
         for piece in self.pieces:
             positions[coord_to_position(piece.rank, piece.file)] = piece
         return positions
-    
+
 class PositionRenderer:
 
     def __init__(self, chars = None, darkmode = False):
@@ -118,7 +118,7 @@ class PositionRenderer:
                 if (rank + file) % 2 == 1:
                     # white space
                     back = self.chars[CHAR_ID.white_space]
-                coord = coord_to_position(rank, file) 
+                coord = coord_to_position(rank, file)
                 if coord in positions:
                     piece = positions[coord]
                     board += get_unicode_char(piece.piece_id, piece.is_black, self.darkmode) + ' '
@@ -168,7 +168,7 @@ class MoveStrategyChecker():
             d_print("Tried to move more than 2 squares forward.")
             return False
         return True
-    
+
     @classmethod
     def check_knight_move(cls, piece : Piece, end_coords : tuple[int,int]):
         x_move = abs(piece.file - end_coords[0])
@@ -176,7 +176,7 @@ class MoveStrategyChecker():
         if not ((x_move == 1 and y_move == 2) or (x_move == 2 and y_move == 1)):
             return False
         return True
-    
+
     @classmethod
     def check_bishop_move(cls, piece : Piece, end_coords : tuple[int,int]):
         x_move = abs(piece.file - end_coords[0])
@@ -197,7 +197,7 @@ class MoveStrategyChecker():
             d_print("Rooks must move along a rank or file.")
             return False
         return True
-    
+
     @classmethod
     def check_queen_move(cls, piece : Piece, end_coords : tuple[int,int]):
         x_move = abs(piece.file - end_coords[0])
@@ -210,7 +210,7 @@ class MoveStrategyChecker():
             d_print("Queen must move.")
             return False
         return True
-    
+
     @classmethod
     def check_king_move(cls, piece : Piece, end_coords : tuple[int,int]):
         x_move = abs(piece.file - end_coords[0])
@@ -227,7 +227,7 @@ class MoveStrategyChecker():
         return True
 
 class PieceChecker():
-    
+
     @classmethod
     def check_move(cls, board : Position, piece : Piece, end_position : str, black_to_move : bool):
         end_coords = position_to_coord(end_position)
@@ -241,8 +241,8 @@ class PieceChecker():
         }
         return strategies[piece.piece_id](board, piece, end_coords, black_to_move)
 
-    @classmethod 
-    def check_endpoint(cls, board : Position, piece : Piece, end_position : tuple[int, int], black_to_move : bool):    
+    @classmethod
+    def check_endpoint(cls, board : Position, piece : Piece, end_position : tuple[int, int], black_to_move : bool):
         positions = board.get_piece_positions()
         at_endpoint = positions.get(coord_to_position(end_position[1], end_position[0]))
         if at_endpoint != None and at_endpoint.is_black == black_to_move:
@@ -251,7 +251,7 @@ class PieceChecker():
         return True
 
     @classmethod
-    def check_obstacles(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool):    
+    def check_obstacles(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool):
         x_move = end_coords[0] - piece.file
         y_move = end_coords[1] - piece.rank
         x_increment = int(x_move / abs(x_move)) if x_move != 0 else 0
@@ -270,12 +270,37 @@ class PieceChecker():
             cur_y += y_increment
         return True
 
+    @classmethod
+    def check_en_passant(cls, piece: Piece, board : Position, end_coords : tuple[int], prev_move : str = None):
+        if prev_move == None:
+            return False
+        position_split = prev_move.split()
+        prev_start = position_to_coord(position_split[0])
+        prev_end = position_to_coord(position_split[1])
+        positions = board.get_piece_positions()
+        prev_piece : Piece = positions.get(position_split[1])
+        # enemy piece is not a pawn, or it's not an enemy
+        if prev_piece.piece_id != PIECE_ID.pawn or prev_piece.is_black == piece.is_black:
+            return False
+        # enemy pawn is not beside attacking pawn
+        if not (abs(prev_end[0] - piece.file) == 1 and prev_end[1] == piece.rank):
+            return False
+        # enemy pawn is not on same side as attempted capture
+        if not (prev_end[0] - piece.file == end_coords[0] - piece.file):
+            return False
+        # enemy pawn didn't move 2 squares last move
+        if not abs(prev_end[1] - prev_start[1]) == 2:
+            return False
+        return True
+
     # en passant not yet implemented
     @classmethod
-    def check_pawn_move(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool):
+    def check_pawn_move(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool, prev_move : str):
         positions = board.get_piece_positions()
         at_endpoint = positions.get(coord_to_position(end_coords[1], end_coords[0]))
         if abs(end_coords[0] - piece.file) == 1 and (at_endpoint == None or at_endpoint.is_black == black_to_move):
+            if at_endpoint == None and cls.check_en_passant(piece, board, end_coords, prev_move):
+                return True
             # must be capturing to move diagonally
             # and can't capture own piece
             d_print("You can't move diagonally unless you're capturing, and can't capture your own piece.")
@@ -293,9 +318,9 @@ class PieceChecker():
                 # there's something in the way of moving to that spot
                 return False
         return True
-    
+
     @classmethod
-    def check_knight_move(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool):    
+    def check_knight_move(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool):
         if not cls.check_endpoint(board, piece, end_coords, black_to_move):
             return False
         return True
@@ -303,21 +328,21 @@ class PieceChecker():
     # logic for rooks, queens, and bishops is identical: these pieces have no special rules
     # we also need to check obstacles for king in case of castling
     @classmethod
-    def check_bqkr_move(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool):    
+    def check_bqkr_move(cls, board : Position, piece : Piece, end_coords : tuple[int, int], black_to_move : bool):
         if not cls.check_obstacles(board, piece, end_coords, black_to_move):
             return False
         if not cls.check_endpoint(board, piece, end_coords, black_to_move):
             return False
         return True
-    
+
     @classmethod
     def check_castling(cls, position : Position, start_position : str, end_position : str, black_to_move : bool):
         piece_positions = position.get_piece_positions()
         piece = piece_positions.get(start_position)
-        
+
         # if we're not moving a king
         if not piece.piece_id == PIECE_ID.king: return True
-        
+
         start_coords = position_to_coord(start_position)
         end_coords = position_to_coord(end_position)
         x_diff = end_coords[0] - start_coords[0]
@@ -349,7 +374,7 @@ class CheckChecker:
             if MoveStrategyChecker.check_move(piece, to_attack) and PieceChecker.check_move(board, piece, to_attack, team_is_black):
                 d_print("A piece can give check to king.")
                 return True
-        return False  
+        return False
 
     # tuple stores [is black in check? is white in check?]
     @classmethod
@@ -375,7 +400,7 @@ class CheckChecker:
             cls.check_can_attack(board, False, black_position),
             cls.check_can_attack(board, True, white_position)
         )
-    
+
 class MoveMaker():
     @classmethod
     def make_possible_moves(cls, position : Position, piece : Piece):
@@ -388,7 +413,7 @@ class MoveMaker():
             PIECE_ID.knight: cls.make_knight_move
         }
         return strategies[piece.piece_id](piece)
-    
+
     @classmethod
     def make_pawn_move(cls, piece : Piece):
         forward = -1 if piece.is_black else 1
@@ -483,21 +508,40 @@ class Game():
         self.pawn_choice = pawn_choice
 
     @classmethod
-    def new_position_from_move(self, prev_position : Position, start_position : str, end_position : str, make_pawn_choice : callable) -> Position:
+    def new_position_from_move(self, prev_position : Position, start_position : str, end_position : str, make_pawn_choice : callable, prev_move : str = None) -> Position:
         new_position = deepcopy(prev_position)
         start_coords = position_to_coord(start_position)
         end_coords = position_to_coord(end_position)
         new_pieces = []
+        prev_positions = prev_position.get_piece_positions()
+        print(start_position)
+        piece = prev_positions.get(start_position)
+        print(piece.piece_id)
         # indirectly, remove the piece that we're capturing
-        for piece in new_position.pieces:
-            if piece.file != end_coords[0] or piece.rank != end_coords[1]:
-                new_pieces.append(piece)
-            else:
-                # some kind of behaviour to indicate capture
-                pass
+        for cur_piece in new_position.pieces:
+            if cur_piece.file == end_coords[0] and cur_piece.rank == end_coords[1]:
+                # unambiguous capture
+                continue
+
+            # check for en passant
+            if prev_move != None:
+                prev_end = position_to_coord(prev_move.split()[1])
+                # need to recheck because otherwise if an en passant is merely possible we remove everything
+                # ie we need to check that cur_piece is the correct one to remove
+                conditions = [
+                    cur_piece.piece_id == PIECE_ID.pawn,
+                    cur_piece.is_black != piece.is_black,
+                    cur_piece.rank == piece.rank,
+                    prev_end[0] - cur_piece.file == end_coords[0] - piece.file,
+                    PieceChecker.check_en_passant(piece, prev_position, end_coords, prev_move)
+                ]
+                if all(conditions): continue
+
+            new_pieces.append(cur_piece)
+
         new_position.pieces = new_pieces
         piece_positions = new_position.get_piece_positions()
-        piece = piece_positions.get(start_position)
+
         # check for castling as we then need to move *two* pieces
         # if it's an invalid castle it should have been dealt with long ago
         if piece.piece_id == PIECE_ID.king and abs(start_coords[0] - end_coords[0]) == 2:
@@ -510,11 +554,10 @@ class Game():
         elif piece.piece_id == PIECE_ID.pawn and (end_coords[1] == 7 or end_coords[1] == 0):
             pawn_choice : int = make_pawn_choice()
             piece.piece_id = pawn_choice
-
         piece.file, piece.rank = end_coords
         piece.moved = True
         return new_position
-    
+
     @classmethod
     def always_promote_queen(cls):
         return PIECE_ID.queen
@@ -522,16 +565,17 @@ class Game():
     # helpful for AI
     # if this returns 0 positions, it means that the player whose turn it is has been mated
     @classmethod
-    def generate_next_positions(cls, position : Position, black_to_move : bool):
+    def generate_next_positions(cls, position : Position, black_to_move : bool, prev_move : str = None):
         pieces : list[Piece] = position.pieces
         pieces_to_move = filter(lambda piece : piece.is_black == black_to_move, pieces)
         moves = []
         for piece in pieces_to_move:
             moves.extend(MoveMaker.make_possible_moves(position, piece))
-        valid_moves = filter(lambda move : cls.check_move(position, move[0], move[1], black_to_move), moves)
+        valid_moves = filter(lambda move : cls.check_move(position, move[0], move[1], black_to_move, prev_move), moves)
         next_positions = []
         for move in valid_moves:
-            next_positions.append(cls.new_position_from_move(position, move[0], move[1], cls.always_promote_queen))
+            next_positions.append(cls.new_position_from_move(position, move[0],
+move[1], cls.always_promote_queen, prev_move))
         return next_positions
 
     def try_move(self, start_position : str, end_position : str):
@@ -546,10 +590,10 @@ class Game():
             print(f"{team} is in check!")
         # for checkmate, need to generate all possible next moves for defending team and see if any escape check
         self.black_to_move = not self.black_to_move
-        
+
 
     @classmethod
-    def check_move(cls, board : Position, start_position : str, end_position : str, black_to_move : bool):
+    def check_move(cls, board : Position, start_position : str, end_position : str, black_to_move : bool, prev_move : str = None):
         piece_positions = board.get_piece_positions()
         piece = piece_positions.get(start_position)
         # check that there's a piece where we want to move
@@ -572,7 +616,7 @@ class Game():
             if not PieceChecker.check_castling(board, start_position, end_position, black_to_move):
                 return False
         # check that the move doesn't reveal or maintain check for player moving
-        new_position = Game.new_position_from_move(board, start_position, end_position, cls.always_promote_queen)
+        new_position = Game.new_position_from_move(board, start_position, end_position, cls.always_promote_queen, prev_move)
         in_check = CheckChecker.check_check(new_position)
         # reversed because black_to_move is the PREVIOUS state of the board
         if (black_to_move and in_check[0]) or (not black_to_move and in_check[1]):
@@ -655,7 +699,10 @@ def main():
     while True:
         game.render()
 
-        next_moves = Game.generate_next_positions(game.current_position, game.black_to_move)
+        prev_move = None
+        if len(game.prev_moves) > 0:
+            prev_move = game.prev_moves[-1]
+        next_moves = Game.generate_next_positions(game.current_position, game.black_to_move, prev_move)
         checks = CheckChecker.check_check(game.current_position)
         if len(next_moves) == 0:
             if checks[0] or checks[1]:
@@ -672,7 +719,7 @@ def main():
 
         if len(move_split) == 2:
             game.try_move(move_split[0], move_split[1])
-        
+
         # store after each move
         if store_path != None:
             with open(store_path, "w") as f:
